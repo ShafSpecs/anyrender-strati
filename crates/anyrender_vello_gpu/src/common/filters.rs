@@ -1,14 +1,7 @@
-use std::sync::Arc;
-
 use anyrender::filters::{EdgeMode, Filter, FilterEffect};
 use vello_common::filter_effects::FilterPrimitive;
 
-/// The filters of a linear filter list (CSS `filter: a() b() ...`), one per
-/// effect, in the order they apply. Vello Hybrid runs one primitive per
-/// layer, so the painter nests a layer for each, the first innermost; each
-/// result is clamped before the next, as in browsers. Effects Vello can't
-/// run are left out.
-pub(crate) fn convert_filter(filter: Arc<Filter>) -> Vec<vello_common::filter_effects::Filter> {
+pub(crate) fn convert_filter(filter: &Filter) -> Vec<vello_common::filter_effects::Filter> {
     filter
         .nodes()
         .iter()
@@ -21,13 +14,18 @@ pub(crate) fn convert_filter_effect(effect: &FilterEffect) -> Option<FilterPrimi
     Some(match effect {
         FilterEffect::Flood(color) => FilterPrimitive::Flood { color: *color },
         FilterEffect::GaussianBlur(blur) => FilterPrimitive::GaussianBlur {
-            std_deviation: blur.std_deviation,
+            std_deviation_x: blur.std_deviation_x,
+            std_deviation_y: blur.std_deviation_y,
             edge_mode: convert_edge_mode(blur.edge_mode),
         },
+        // Vello has one standard deviation for both axes.
+        FilterEffect::DropShadow(shadow) if shadow.std_deviation_x != shadow.std_deviation_y => {
+            return None;
+        }
         FilterEffect::DropShadow(shadow) => FilterPrimitive::DropShadow {
             dx: shadow.dx,
             dy: shadow.dy,
-            std_deviation: shadow.std_deviation,
+            std_deviation: shadow.std_deviation_x,
             color: shadow.color,
             edge_mode: convert_edge_mode(shadow.edge_mode),
         },
