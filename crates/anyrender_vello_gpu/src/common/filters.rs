@@ -1,6 +1,8 @@
 use anyrender::filters::{EdgeMode, Filter, FilterEffect, FilterInput, FilterSource};
 use vello_common::filter_effects::FilterPrimitive;
 
+/// Supports only single-input chains from SourceGraphic, with one region per chain.
+/// Every primitive runs in sRGB; node colour spaces are ignored, so this is not general SVG parity.
 /// Returns identity for unsupported sources (including SourceAlpha/BackgroundImage),
 /// two-input nodes, invalid references, or cycles on the output chain.
 pub(crate) fn convert_filter(filter: &Filter) -> Vec<vello_common::filter_effects::Filter> {
@@ -111,7 +113,7 @@ fn convert_edge_mode(edge_mode: EdgeMode) -> vello_common::filter_effects::EdgeM
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyrender::filters::{FilterId, FilterInput, FilterInputs, FilterSource};
+    use anyrender::filters::{FilterColorSpace, FilterId, FilterInput, FilterInputs, FilterSource};
     use kurbo::{Affine, Rect};
     use vello_common::filter::PreparedFilter;
 
@@ -164,27 +166,42 @@ mod tests {
     #[test]
     fn source_graphic_resets_the_chain() {
         let mut filter = Filter::new(Rect::ZERO);
-        filter.add(
+        filter.add_with_color_space(
             FilterEffect::Offset(kurbo::Vec2::new(4.0, 0.0)),
             FilterInputs::single(graphic()),
+            FilterColorSpace::Srgb,
         );
-        filter.add(FilterEffect::invert(1.0), FilterInputs::single(graphic()));
+        filter.add_with_color_space(
+            FilterEffect::invert(1.0),
+            FilterInputs::single(graphic()),
+            FilterColorSpace::Srgb,
+        );
         assert_same_chain(&filter, [FilterEffect::invert(1.0)]);
     }
 
     #[test]
     fn explicit_node_and_previous_result_chain() {
         let mut filter = Filter::new(Rect::ZERO);
-        let first = filter.add(FilterEffect::brightness(2.0), FilterInputs::NONE);
-        filter.add(
+        let first = filter.add_with_color_space(
+            FilterEffect::brightness(2.0),
+            FilterInputs::NONE,
+            FilterColorSpace::Srgb,
+        );
+        filter.add_with_color_space(
             FilterEffect::Offset(kurbo::Vec2::new(4.0, 0.0)),
             FilterInputs::NONE,
+            FilterColorSpace::Srgb,
         );
-        filter.add(
+        filter.add_with_color_space(
             FilterEffect::invert(1.0),
             FilterInputs::single(FilterInput::Result(first)),
+            FilterColorSpace::Srgb,
         );
-        filter.add(FilterEffect::opacity(0.5), FilterInputs::NONE);
+        filter.add_with_color_space(
+            FilterEffect::opacity(0.5),
+            FilterInputs::NONE,
+            FilterColorSpace::Srgb,
+        );
         assert_same_chain(
             &filter,
             [
@@ -199,20 +216,23 @@ mod tests {
     fn invalid_and_cyclic_inputs_are_identity() {
         for id in [FilterId(99), FilterId(0)] {
             let mut filter = Filter::new(Rect::ZERO);
-            filter.add(
+            filter.add_with_color_space(
                 FilterEffect::invert(1.0),
                 FilterInputs::single(FilterInput::Result(id)),
+                FilterColorSpace::Srgb,
             );
             assert!(convert_filter(&filter).is_empty(), "input {id:?}");
         }
         let mut filter = Filter::new(Rect::ZERO);
-        filter.add(
+        filter.add_with_color_space(
             FilterEffect::brightness(2.0),
             FilterInputs::single(FilterInput::Result(FilterId(1))),
+            FilterColorSpace::Srgb,
         );
-        filter.add(
+        filter.add_with_color_space(
             FilterEffect::invert(1.0),
             FilterInputs::single(FilterInput::Result(FilterId(0))),
+            FilterColorSpace::Srgb,
         );
         assert!(convert_filter(&filter).is_empty());
     }
@@ -221,17 +241,23 @@ mod tests {
     fn unsupported_sources_and_two_inputs_are_identity() {
         for source in [FilterSource::SourceAlpha, FilterSource::BackgroundImage] {
             let mut filter = Filter::new(Rect::ZERO);
-            filter.add(
+            filter.add_with_color_space(
                 FilterEffect::invert(1.0),
                 FilterInputs::single(FilterInput::Source(source)),
+                FilterColorSpace::Srgb,
             );
             assert!(convert_filter(&filter).is_empty());
         }
         let mut filter = Filter::new(Rect::ZERO);
-        filter.add(FilterEffect::invert(1.0), FilterInputs::NONE);
-        filter.add(
+        filter.add_with_color_space(
+            FilterEffect::invert(1.0),
+            FilterInputs::NONE,
+            FilterColorSpace::Srgb,
+        );
+        filter.add_with_color_space(
             FilterEffect::Blend(peniko::Mix::Multiply),
             FilterInputs::dual(graphic(), graphic()),
+            FilterColorSpace::Srgb,
         );
         assert!(convert_filter(&filter).is_empty());
     }

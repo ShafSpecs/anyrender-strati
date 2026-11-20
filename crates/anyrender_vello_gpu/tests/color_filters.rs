@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyrender::{
     AntiAliasing, Filter, PaintScene,
-    filters::{FilterEffect, FilterInput, FilterInputs, FilterSource},
+    filters::{FilterColorSpace, FilterEffect, FilterInput, FilterInputs, FilterSource},
 };
 use anyrender_vello_gpu::{ExternalTextures, ImageCache, ImageManager, VelloGpuScenePainter};
 use kurbo::{Affine, Rect};
@@ -150,14 +150,16 @@ fn color_filters_render_in_order_with_stage_clamping_and_regions() {
     for (name, effects, region, color, expected) in cases {
         let filter = if name == "selected chain region" {
             let mut filter = Filter::new(Rect::new(4.0, 0.0, 12.0, SIZE as f64));
-            filter.add(
+            filter.add_with_color_space(
                 FilterEffect::Offset(kurbo::Vec2::new(4.0, 0.0)),
                 FilterInputs::single(FilterInput::Source(FilterSource::SourceGraphic)),
+                FilterColorSpace::Srgb,
             );
             filter.set_region(region);
-            filter.add(
+            filter.add_with_color_space(
                 FilterEffect::invert(1.0),
                 FilterInputs::single(FilterInput::Source(FilterSource::SourceGraphic)),
+                FilterColorSpace::Srgb,
             );
             filter
         } else if name == "SourceGraphic reset after offset"
@@ -170,7 +172,11 @@ fn color_filters_render_in_order_with_stage_clamping_and_regions() {
                 } else {
                     FilterSource::SourceGraphic
                 };
-                filter.add(effect, FilterInputs::single(FilterInput::Source(source)));
+                filter.add_with_color_space(
+                    effect,
+                    FilterInputs::single(FilterInput::Source(source)),
+                    FilterColorSpace::Srgb,
+                );
             }
             filter
         } else {
