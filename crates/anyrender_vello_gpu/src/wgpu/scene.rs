@@ -388,8 +388,13 @@ impl PaintScene for VelloGpuScenePainter<'_> {
         filter: Option<Arc<Filter>>,
         _backdrop_filter: Option<Arc<Filter>>,
     ) {
-        let mut filters = filter.as_deref().map(crate::common::convert_filter).unwrap_or_default();
-        let region = filter.as_ref().and_then(|f| f.nodes().first().map(|n| n.region));
+        let mut filters = filter
+            .as_deref()
+            .map(crate::common::convert_filter)
+            .unwrap_or_default();
+        let region = filter
+            .as_ref()
+            .and_then(|f| f.nodes().first().map(|n| n.region));
         let filter = filters.pop();
         let nested = filters.len();
         self.scene.set_transform(transform);

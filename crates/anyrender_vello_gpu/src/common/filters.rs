@@ -34,7 +34,7 @@ pub(crate) fn convert_filter_effect(effect: &FilterEffect) -> Option<FilterPrimi
             dy: offset.y as f32,
         },
         FilterEffect::ColorMatrix(matrix) => FilterPrimitive::ColorMatrix { matrix: matrix.0 },
-        FilterEffect::Blend(_mode) => return None,         //FilterPrimitive::Blend { mode: *mode },
+        FilterEffect::Blend(_mode) => return None, //FilterPrimitive::Blend { mode: *mode },
         FilterEffect::ComponentTransfer(_component_transfer_filter) => return None,
         FilterEffect::Composite(_composite_operator) => return None,
         FilterEffect::Morphology(_morphology_filter) => return None,
@@ -75,11 +75,15 @@ mod tests {
             FilterEffect::brightness(0.4),
             FilterEffect::contrast(0.4),
         ] {
-            let FilterEffect::ColorMatrix(expected) = &effect else { panic!() };
+            let FilterEffect::ColorMatrix(expected) = &effect else {
+                panic!()
+            };
             let converted = convert_filter(&Filter::single(effect.clone(), Rect::ZERO));
             let PreparedFilter::ColorMatrix(actual) =
                 PreparedFilter::new(&converted[0], &Affine::IDENTITY)
-            else { panic!() };
+            else {
+                panic!()
+            };
             assert_eq!(actual.matrix, expected.0);
         }
     }
@@ -98,7 +102,9 @@ mod tests {
         while let Some(filter) = stack.pop() {
             let PreparedFilter::ColorMatrix(matrix) =
                 PreparedFilter::new(&filter, &Affine::IDENTITY)
-            else { panic!() };
+            else {
+                panic!()
+            };
             pixel = matrix.apply_premultiplied(pixel);
         }
         assert_eq!(pixel, [0.0, 0.5, 1.0, 1.0]);
@@ -108,7 +114,11 @@ mod tests {
     fn empty_and_unsupported_filters_do_not_create_layers() {
         assert!(convert_filter(&Filter::new(Rect::ZERO)).is_empty());
         let filter = Filter::linear_list(
-            [FilterEffect::Tile, FilterEffect::invert(1.0), FilterEffect::Tile],
+            [
+                FilterEffect::Tile,
+                FilterEffect::invert(1.0),
+                FilterEffect::Tile,
+            ],
             Rect::ZERO,
         );
         assert_eq!(convert_filter(&filter).len(), 1);
