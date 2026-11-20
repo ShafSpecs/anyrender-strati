@@ -56,3 +56,61 @@ fn convert_edge_mode(edge_mode: EdgeMode) -> vello_common::filter_effects::EdgeM
         EdgeMode::None => vello_common::filter_effects::EdgeMode::None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kurbo::{Affine, Rect};
+    use vello_common::filter::PreparedFilter;
+
+    #[test]
+    fn css_color_matrices_are_preserved() {
+        for effect in [
+            FilterEffect::grayscale(0.4),
+            FilterEffect::sepia(0.4),
+            FilterEffect::saturate(0.4),
+            FilterEffect::hue_rotate(0.4),
+            FilterEffect::invert(0.4),
+            FilterEffect::opacity(0.4),
+            FilterEffect::brightness(0.4),
+            FilterEffect::contrast(0.4),
+        ] {
+            let FilterEffect::ColorMatrix(expected) = &effect else { panic!() };
+            let converted = convert_filter(&Filter::single(effect.clone(), Rect::ZERO));
+            let PreparedFilter::ColorMatrix(actual) =
+                PreparedFilter::new(&converted[0], &Affine::IDENTITY)
+            else { panic!() };
+            assert_eq!(actual.matrix, expected.0);
+        }
+    }
+
+    #[test]
+    fn nested_filters_apply_in_order_and_clamp_each_stage() {
+        let filter = Filter::linear_list(
+            [FilterEffect::brightness(2.0), FilterEffect::invert(1.0)],
+            Rect::ZERO,
+        );
+        let mut filters = convert_filter(&filter);
+        let outer = filters.pop().unwrap();
+        let mut stack = vec![outer];
+        stack.extend(filters.into_iter().rev());
+        let mut pixel = [0.75, 0.25, 0.0, 1.0];
+        while let Some(filter) = stack.pop() {
+            let PreparedFilter::ColorMatrix(matrix) =
+                PreparedFilter::new(&filter, &Affine::IDENTITY)
+            else { panic!() };
+            pixel = matrix.apply_premultiplied(pixel);
+        }
+        assert_eq!(pixel, [0.0, 0.5, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn empty_and_unsupported_filters_do_not_create_layers() {
+        assert!(convert_filter(&Filter::new(Rect::ZERO)).is_empty());
+        let filter = Filter::linear_list(
+            [FilterEffect::Tile, FilterEffect::invert(1.0), FilterEffect::Tile],
+            Rect::ZERO,
+        );
+        assert_eq!(convert_filter(&filter).len(), 1);
+    }
+}

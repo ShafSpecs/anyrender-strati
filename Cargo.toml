@@ -91,3 +91,23 @@ web-sys = "0.3"
 
 # Dev-dependencies
 winit = { version = "0.30.2", features = ["rwh_06"] }
+
+[patch.crates-io]
+vello = { git = "https://github.com/ShafSpecs/vello-strati", rev = "4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4" }
+vello_encoding = { git = "https://github.com/ShafSpecs/vello-strati", rev = "4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4" }
+vello_shaders = { git = "https://github.com/ShafSpecs/vello-strati", rev = "4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4" }
+vello_common = { git = "https://github.com/ShafSpecs/vello-strati", rev = "4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4" }
+vello_cpu = { git = "https://github.com/ShafSpecs/vello-strati", rev = "4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4" }
+vello_gpu = { git = "https://github.com/ShafSpecs/vello-strati", rev = "4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4" }
+vello_gpu_shaders = { git = "https://github.com/ShafSpecs/vello-strati", rev = "4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4" }
+glifo = { git = "https://github.com/ShafSpecs/vello-strati", rev = "4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4" }
+wgpu = { git = "https://github.com/ShafSpecs/wgpu-strati", rev = "fdd02b66e397cfa1b8807798d68e3da847cb74c8" }
+wgpu-core = { git = "https://github.com/ShafSpecs/wgpu-strati", rev = "fdd02b66e397cfa1b8807798d68e3da847cb74c8" }
+wgpu-hal = { git = "https://github.com/ShafSpecs/wgpu-strati", rev = "fdd02b66e397cfa1b8807798d68e3da847cb74c8" }
+wgpu-types = { git = "https://github.com/ShafSpecs/wgpu-strati", rev = "fdd02b66e397cfa1b8807798d68e3da847cb74c8" }
+wgpu-naga-bridge = { git = "https://github.com/ShafSpecs/wgpu-strati", rev = "fdd02b66e397cfa1b8807798d68e3da847cb74c8" }
+wgpu-core-deps-windows-linux-android = { git = "https://github.com/ShafSpecs/wgpu-strati", rev = "fdd02b66e397cfa1b8807798d68e3da847cb74c8" }
+wgpu-core-deps-apple = { git = "https://github.com/ShafSpecs/wgpu-strati", rev = "fdd02b66e397cfa1b8807798d68e3da847cb74c8" }
+wgpu-core-deps-emscripten = { git = "https://github.com/ShafSpecs/wgpu-strati", rev = "fdd02b66e397cfa1b8807798d68e3da847cb74c8" }
+naga = { git = "https://github.com/ShafSpecs/wgpu-strati", rev = "fdd02b66e397cfa1b8807798d68e3da847cb74c8" }
+naga-types = { git = "https://github.com/ShafSpecs/wgpu-strati", rev = "fdd02b66e397cfa1b8807798d68e3da847cb74c8" }
