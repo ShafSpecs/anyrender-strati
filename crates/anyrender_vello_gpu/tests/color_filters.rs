@@ -77,6 +77,13 @@ fn color_filters_render_in_order_with_stage_clamping_and_regions() {
             [64, 128, 128, 128],
         ),
         (
+            "brightness then brightness",
+            vec![FilterEffect::brightness(2.0), FilterEffect::brightness(0.5)],
+            canvas,
+            Color::new([0.75, 0.25, 0.0, 0.5]),
+            [64, 32, 0, 128],
+        ),
+        (
             "grayscale",
             vec![FilterEffect::grayscale(1.0)],
             canvas,
