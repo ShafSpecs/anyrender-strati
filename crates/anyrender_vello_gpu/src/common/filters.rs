@@ -1,6 +1,8 @@
 use anyrender::filters::{EdgeMode, Filter, FilterEffect, FilterInput, FilterSource};
 use vello_common::filter_effects::FilterPrimitive;
 
+/// Returns identity for unsupported sources (including SourceAlpha/BackgroundImage),
+/// two-input nodes, invalid references, or cycles on the output chain.
 pub(crate) fn convert_filter(filter: &Filter) -> Vec<vello_common::filter_effects::Filter> {
     let nodes = filter.nodes();
     let mut current = usize::from(filter.output().0);
@@ -37,6 +39,26 @@ pub(crate) fn convert_filter(filter: &Filter) -> Vec<vello_common::filter_effect
     }
     filters.reverse();
     filters
+}
+
+/// Applies one region to the whole chain: the output node's region.
+/// Heterogeneous intermediate regions are not applied individually; identity has no region.
+pub(crate) fn convert_filter_with_region(
+    filter: &Filter,
+) -> (
+    Vec<vello_common::filter_effects::Filter>,
+    Option<kurbo::Rect>,
+) {
+    let filters = convert_filter(filter);
+    let region = (!filters.is_empty())
+        .then(|| {
+            filter
+                .nodes()
+                .get(usize::from(filter.output().0))
+                .map(|node| node.region)
+        })
+        .flatten();
+    (filters, region)
 }
 
 pub(crate) fn convert_filter_effect(effect: &FilterEffect) -> Option<FilterPrimitive> {
@@ -114,6 +136,29 @@ mod tests {
             FilterEffect::invert(1.0),
         ];
         assert_same_chain(&Filter::linear_list(effects.clone(), Rect::ZERO), effects);
+    }
+
+    #[test]
+    fn chain_region_preserves_linear_lists_and_identity() {
+        let filter = Filter::linear_list(
+            [
+                FilterEffect::Offset(kurbo::Vec2::new(4.0, 0.0)),
+                FilterEffect::invert(1.0),
+            ],
+            Rect::new(0.0, 0.0, 16.0, 16.0),
+        );
+        let region = convert_filter_with_region(&filter).1.unwrap();
+        assert!(filter.nodes().iter().all(|node| node.region == region));
+        assert!(
+            convert_filter_with_region(&Filter::new(Rect::ZERO))
+                .1
+                .is_none()
+        );
+        assert!(
+            convert_filter_with_region(&Filter::single(FilterEffect::Tile, Rect::ZERO))
+                .1
+                .is_none()
+        );
     }
 
     #[test]

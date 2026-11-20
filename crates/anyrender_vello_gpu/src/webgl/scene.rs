@@ -218,14 +218,10 @@ impl PaintScene for WebGlScenePainter<'_> {
         filter: Option<Arc<Filter>>,
         _backdrop_filter: Option<Arc<Filter>>,
     ) {
-        let mut filters = filter
+        let (mut filters, region) = filter
             .as_deref()
-            .map(crate::common::convert_filter)
+            .map(crate::common::convert_filter_with_region)
             .unwrap_or_default();
-        let region = filter
-            .as_ref()
-            .filter(|_| !filters.is_empty())
-            .and_then(|f| f.nodes().first().map(|n| n.region));
         let filter = filters.pop();
         let nested = filters.len();
         self.scene.set_transform(transform);

@@ -138,10 +138,29 @@ fn color_filters_render_in_order_with_stage_clamping_and_regions() {
             Color::new([0.75, 0.25, 0.0, 0.5]),
             [96, 32, 0, 128],
         ),
+        (
+            "selected chain region",
+            vec![],
+            Rect::new(0.0, 0.0, 8.0, SIZE as f64),
+            Color::new([0.75, 0.25, 0.0, 0.5]),
+            [32, 96, 128, 128],
+        ),
     ];
     let mut ordered_pixel = None;
     for (name, effects, region, color, expected) in cases {
-        let filter = if name == "SourceGraphic reset after offset"
+        let filter = if name == "selected chain region" {
+            let mut filter = Filter::new(Rect::new(4.0, 0.0, 12.0, SIZE as f64));
+            filter.add(
+                FilterEffect::Offset(kurbo::Vec2::new(4.0, 0.0)),
+                FilterInputs::single(FilterInput::Source(FilterSource::SourceGraphic)),
+            );
+            filter.set_region(region);
+            filter.add(
+                FilterEffect::invert(1.0),
+                FilterInputs::single(FilterInput::Source(FilterSource::SourceGraphic)),
+            );
+            filter
+        } else if name == "SourceGraphic reset after offset"
             || name == "unsupported input has no region"
         {
             let mut filter = Filter::new(region);
@@ -218,7 +237,11 @@ fn color_filters_render_in_order_with_stage_clamping_and_regions() {
         let pixel = &pixels[offset..offset + 4];
         eprintln!("{name}: premultiplied RGBA {pixel:?}, expected {expected:?}");
         assert_pixel(&pixels, 4, 4, expected);
-        if name == "SourceGraphic reset after offset" || name == "unshifted invert" {
+        if name == "SourceGraphic reset after offset"
+            || name == "unshifted invert"
+            || name == "selected chain region"
+        {
+            eprintln!("{name}: checking filtered pixel (2, 4)");
             assert_pixel(&pixels, 2, 4, expected);
         }
         assert_pixel(&pixels, 14, 14, [255; 4]);
@@ -226,8 +249,9 @@ fn color_filters_render_in_order_with_stage_clamping_and_regions() {
             ordered_pixel = Some(pixel.to_vec());
         } else if name == "invert then brightness" {
             assert_ne!(pixel, ordered_pixel.as_ref().unwrap());
-        } else if name == "filter region" {
+        } else if name == "filter region" || name == "selected chain region" {
             assert_pixel(&pixels, 10, 4, [0; 4]);
+            eprintln!("{name}: pixel (10, 4) clipped to transparent");
         } else if name == "unsupported-only filter" || name == "unsupported input has no region" {
             assert_pixel(&pixels, 10, 4, expected);
         }

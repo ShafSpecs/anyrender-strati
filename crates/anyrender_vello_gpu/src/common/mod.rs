@@ -5,7 +5,7 @@ mod image_cache;
 mod options;
 mod scene;
 
-pub(crate) use filters::convert_filter;
+pub(crate) use filters::convert_filter_with_region;
 pub use image_cache::ImageCache;
 pub use options::VelloGpuRendererOptions;
 pub(crate) use scene::{DEFAULT_TOLERANCE, LayerKind, supports_glyph_caching};
