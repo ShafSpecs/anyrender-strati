@@ -1,24 +1,24 @@
 use anyrender::{
-    PaintScene, RegisterResourceErrorKind, RenderContext, ResourceId, WindowHandle, WindowRenderer,
+    AntiAliasing, PaintScene, RegisterResourceErrorKind, RenderContext, ResourceId, WindowHandle,
+    WindowRenderer,
 };
 use debug_timer::debug_timer;
 use futures_channel::oneshot;
 use peniko::Color;
-use rustc_hash::FxHashMap;
 use std::future::Future;
 use std::sync::Arc;
-use vello_common::{TextureId, paint::ImageId};
 use vello_gpu::{
-    ClearSettings, RenderSettings, RenderSize, RenderTargetConfig, Renderer as VelloHybridRenderer,
-    Resources, Scene as VelloHybridScene, TargetInit, TextureBindings,
+    RenderOptions, RenderSize, RenderTarget, RenderTargetConfig, Renderer as VelloGpuRenderer,
+    Resources, Scene as VelloGpuScene,
 };
 use wgpu::{
-    CommandEncoderDescriptor, CompositeAlphaMode, Features, Limits, PresentMode, Texture,
-    TextureFormat, TextureView, TextureViewDescriptor,
+    CommandEncoderDescriptor, CompositeAlphaMode, Features, PresentMode, Texture, TextureFormat,
+    TextureView, TextureViewDescriptor,
 };
 use wgpu_context::{DeviceHandle, SurfaceRenderer, SurfaceRendererConfiguration, WGPUContext};
 
-use crate::{VelloHybridScenePainter, scene::ImageManager};
+use super::scene::{ExternalTextures, ImageManager, VelloGpuScenePainter};
+use crate::common::{ImageCache, VelloGpuRendererOptions};
 
 /// Drive the wgpu init future. On wasm32 we spawn it onto the JS microtask
 /// queue (blocking is not allowed). On native we drive it inline with
@@ -35,10 +35,10 @@ fn spawn_init<F: Future<Output = ()>>(f: F) {
 }
 
 struct ActiveRenderState {
-    renderer: VelloHybridRenderer,
+    renderer: VelloGpuRenderer,
     resources: Resources,
     depth_texture_view: TextureView,
-    texture_bindings: FxHashMap<ResourceId, TextureView>,
+    texture_bindings: ExternalTextures,
     render_surface: SurfaceRenderer<'static>,
 }
 
@@ -57,122 +57,34 @@ enum RenderState {
     Active(ActiveRenderState),
 }
 
-#[derive(Clone)]
-#[non_exhaustive]
-pub struct VelloHybridRendererOptions {
-    pub features: Option<Features>,
-    pub limits: Option<Limits>,
-    pub render_settings: RenderSettings,
-    pub base_color: Color,
-    /// Alpha mode used when compositing the window surface.
-    pub composite_alpha_mode: anyrender::CompositeAlphaMode,
-    /// Maximum number of frames the presentation engine may queue ahead of the
-    /// display. Each queued frame requires a window-sized swapchain surface, so
-    /// lower values reduce memory usage and input latency at the cost of less
-    /// buffering to absorb slow frames.
-    pub desired_maximum_frame_latency: u32,
-}
-
-impl Default for VelloHybridRendererOptions {
-    fn default() -> Self {
-        Self {
-            features: None,
-            limits: None,
-            render_settings: RenderSettings::default(),
-            base_color: Color::WHITE,
-            composite_alpha_mode: anyrender::CompositeAlphaMode::Auto,
-            desired_maximum_frame_latency: 1,
-        }
-    }
-}
-
-impl VelloHybridRendererOptions {
-    pub fn new() -> Self {
-        // Within default of RenderSettings there are calls to non const methods so no const for new
-        Self::default()
-    }
-
-    pub const fn features(self, features: Features) -> Self {
-        Self {
-            features: Some(features),
-            ..self
-        }
-    }
-
-    pub const fn limits(self, limits: Limits) -> Self {
-        Self {
-            limits: Some(limits),
-            ..self
-        }
-    }
-
-    pub const fn render_settings(self, render_settings: RenderSettings) -> Self {
-        Self {
-            render_settings,
-            ..self
-        }
-    }
-
-    pub const fn base_color(self, base_color: Color) -> Self {
-        Self { base_color, ..self }
-    }
-
-    pub const fn composite_alpha_mode(
-        self,
-        composite_alpha_mode: anyrender::CompositeAlphaMode,
-    ) -> Self {
-        Self {
-            composite_alpha_mode,
-            ..self
-        }
-    }
-
-    pub const fn desired_maximum_frame_latency(self, desired_maximum_frame_latency: u32) -> Self {
-        Self {
-            desired_maximum_frame_latency,
-            ..self
-        }
-    }
-}
-
-impl From<anyrender::RendererConfig> for VelloHybridRendererOptions {
-    fn from(config: anyrender::RendererConfig) -> Self {
-        Self {
-            base_color: config.base_color.unwrap_or(Color::WHITE),
-            composite_alpha_mode: config.composite_alpha_mode.unwrap_or_default(),
-            ..Default::default()
-        }
-    }
-}
-
-pub struct VelloHybridWindowRenderer {
+pub struct VelloGpuWindowRenderer {
     // The fields MUST be in this order, so that the surface is dropped before the window
     // Window is cached even when suspended so that it can be reused when the app is resumed after being suspended
     render_state: RenderState,
     window_handle: Option<Arc<dyn WindowHandle>>,
 
     wgpu_context: WGPUContext,
-    scene: VelloHybridScene,
-    config: VelloHybridRendererOptions,
-    cached_images: FxHashMap<u64, ImageId>,
+    scene: VelloGpuScene,
+    config: VelloGpuRendererOptions,
+    cached_images: ImageCache,
 }
-impl VelloHybridWindowRenderer {
+impl VelloGpuWindowRenderer {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self::with_options(VelloHybridRendererOptions::default())
+        Self::with_options(VelloGpuRendererOptions::default())
     }
 
-    pub fn with_options(config: impl Into<VelloHybridRendererOptions>) -> Self {
+    pub fn with_options(config: impl Into<VelloGpuRendererOptions>) -> Self {
         let config = config.into();
-        let render_settings = config.render_settings;
+        let render_settings = config.render_settings.clone();
         let wgpu_context = build_wgpu_context(&config);
         Self {
             render_state: RenderState::Suspended,
             config,
             wgpu_context,
             window_handle: None,
-            scene: VelloHybridScene::new_with(0, 0, render_settings.level),
-            cached_images: FxHashMap::default(),
+            scene: VelloGpuScene::new_with(0, 0, render_settings.level()),
+            cached_images: ImageCache::default(),
         }
     }
 
@@ -184,7 +96,7 @@ impl VelloHybridWindowRenderer {
     }
 }
 
-fn build_wgpu_context(config: &VelloHybridRendererOptions) -> WGPUContext {
+fn build_wgpu_context(config: &VelloGpuRendererOptions) -> WGPUContext {
     let features =
         config.features.unwrap_or_default() | Features::CLEAR_TEXTURE | Features::PIPELINE_CACHE;
     WGPUContext::with_features_and_limits(Some(features), config.limits.clone())
@@ -196,7 +108,7 @@ const DEFAULT_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
 #[cfg(not(target_os = "android"))]
 const DEFAULT_TEXTURE_FORMAT: TextureFormat = TextureFormat::Bgra8Unorm;
 
-impl RenderContext for VelloHybridWindowRenderer {
+impl RenderContext for VelloGpuWindowRenderer {
     fn renderer_specific_context(&self) -> Option<Box<dyn std::any::Any>> {
         match &self.render_state {
             RenderState::Active(state) => {
@@ -242,13 +154,13 @@ impl RenderContext for VelloHybridWindowRenderer {
         let RenderState::Active(state) = &mut self.render_state else {
             return;
         };
-        state.texture_bindings.remove(&resource_id);
+        state.texture_bindings.remove(resource_id);
     }
 }
 
-impl WindowRenderer for VelloHybridWindowRenderer {
+impl WindowRenderer for VelloGpuWindowRenderer {
     type ScenePainter<'a>
-        = VelloHybridScenePainter<'a>
+        = VelloGpuScenePainter<'a>
     where
         Self: 'a;
 
@@ -283,8 +195,8 @@ impl WindowRenderer for VelloHybridWindowRenderer {
 
         // Reset the scene to the new dimensions before init kicks off, so callers that
         // query scene size (e.g. `set_size`) see consistent state.
-        let render_settings = self.config.render_settings;
-        self.scene = VelloHybridScene::new_with(width as u16, height as u16, render_settings.level);
+        let render_settings = self.config.render_settings.clone();
+        self.scene = VelloGpuScene::new_with(width as u16, height as u16, render_settings.level());
 
         let surface = self
             .wgpu_context
@@ -357,7 +269,7 @@ impl WindowRenderer for VelloHybridWindowRenderer {
                     .expect("Surface didn't report any alpha modes");
             }
 
-            // Vello Hybrid emits premultiplied alpha and renders directly into
+            // Vello GPU emits premultiplied alpha and renders directly into
             // its target. That matches a `PreMultiplied` surface (and Opaque
             // ignores alpha), so those render straight to the surface. Only
             // `PostMultiplied` (straight alpha) needs conversion, which routes
@@ -397,8 +309,9 @@ impl WindowRenderer for VelloHybridWindowRenderer {
             )
             .expect("Error creating SurfaceRenderer");
 
-            let (renderer, resources) = VelloHybridRenderer::new_with(
+            let (renderer, resources) = VelloGpuRenderer::new_with(
                 render_surface.device(),
+                render_surface.queue(),
                 &RenderTargetConfig {
                     format: DEFAULT_TEXTURE_FORMAT,
                     width: width as u16,
@@ -406,13 +319,10 @@ impl WindowRenderer for VelloHybridWindowRenderer {
                 },
                 render_settings,
             );
-            let depth_texture_view = VelloHybridRenderer::create_depth_texture_view(
-                render_surface.device(),
-                &RenderSize {
-                    width: width as u16,
-                    height: height as u16,
-                },
-            );
+            let depth_texture_view = renderer.create_depth_texture_view(&RenderSize {
+                width: width as u16,
+                height: height as u16,
+            });
 
             let _ = sender.send(InitOutput {
                 active: ActiveRenderState {
@@ -420,7 +330,7 @@ impl WindowRenderer for VelloHybridWindowRenderer {
                     resources,
                     depth_texture_view,
                     render_surface,
-                    texture_bindings: FxHashMap::default(),
+                    texture_bindings: ExternalTextures::default(),
                 },
             });
             on_ready();
@@ -433,6 +343,14 @@ impl WindowRenderer for VelloHybridWindowRenderer {
             RenderState::Suspended => false,
             RenderState::Pending { receiver } => match receiver.try_recv() {
                 Ok(Some(InitOutput { active })) => {
+                    self.cached_images.clear();
+                    let max = active
+                        .render_surface
+                        .device()
+                        .limits()
+                        .max_texture_dimension_2d
+                        .min(u16::MAX as u32) as u16;
+                    self.cached_images.set_max_image_size((max, max));
                     let device_handle = active.render_surface.device_handle.clone();
                     self.wgpu_context.device_pool.push(device_handle);
                     self.render_state = RenderState::Active(active);
@@ -445,24 +363,23 @@ impl WindowRenderer for VelloHybridWindowRenderer {
 
     fn suspend(&mut self) {
         self.render_state = RenderState::Suspended;
+        self.cached_images.clear();
     }
 
     fn set_size(&mut self, width: u32, height: u32) {
         if width as u16 != self.scene.width() || height as u16 != self.scene.height() {
-            self.scene = VelloHybridScene::new_with(
+            self.scene = VelloGpuScene::new_with(
                 width as u16,
                 height as u16,
-                self.config.render_settings.level,
+                self.config.render_settings.level(),
             );
             if let RenderState::Active(active) = &mut self.render_state {
                 active.render_surface.resize(width, height);
-                active.depth_texture_view = VelloHybridRenderer::create_depth_texture_view(
-                    active.render_surface.device(),
-                    &RenderSize {
+                active.depth_texture_view =
+                    active.renderer.create_depth_texture_view(&RenderSize {
                         width: width as u16,
                         height: height as u16,
-                    },
-                );
+                    });
             };
         }
     }
@@ -484,20 +401,19 @@ impl WindowRenderer for VelloHybridWindowRenderer {
                 });
 
         let image_manager = ImageManager {
-            renderer: &mut state.renderer,
             resources: &mut state.resources,
             device: render_surface.device(),
             queue: render_surface.queue(),
-            encoder: &mut encoder,
             cache: &mut self.cached_images,
+            texture_bindings: &mut state.texture_bindings,
         };
 
-        let mut scene_painter = VelloHybridScenePainter {
+        let mut scene_painter = VelloGpuScenePainter {
             scene: &mut self.scene,
             layer_stack: Vec::new(),
             image_manager,
-            texture_bindings: &mut state.texture_bindings,
             device_handle: &render_surface.device_handle,
+            glyph_caching: self.config.glyph_caching,
         };
         if self.config.base_color != Color::TRANSPARENT {
             scene_painter.fill(
@@ -511,6 +427,7 @@ impl WindowRenderer for VelloHybridWindowRenderer {
                     render_surface.config.width as f64,
                     render_surface.config.height as f64,
                 ),
+                AntiAliasing::Enabled,
             );
         }
         // Regenerate the vello scene
@@ -521,33 +438,40 @@ impl WindowRenderer for VelloHybridWindowRenderer {
             // Skip frame in case of error getting surface texture
             render_surface.clear_surface_texture();
             self.scene.reset();
+            ImageManager::new(
+                &mut state.resources,
+                render_surface.device(),
+                render_surface.queue(),
+                &mut self.cached_images,
+                &mut state.texture_bindings,
+            )
+            .finish_frame();
+            render_surface.queue().submit([encoder.finish()]);
             return;
         };
-
-        // Construct Vello Hybrid TextureBindings
-        let mut texture_bindings = TextureBindings::new();
-        for (resource_id, texture_view) in state.texture_bindings.iter() {
-            texture_bindings.insert(TextureId(resource_id.into_ffi()), texture_view.clone());
-        }
 
         state
             .renderer
             .render(
                 &self.scene,
                 &mut state.resources,
-                render_surface.device(),
-                render_surface.queue(),
                 &mut encoder,
-                &RenderSize {
-                    width: render_surface.config.width as u16,
-                    height: render_surface.config.height as u16,
+                RenderTarget {
+                    view: &texture_view,
+                    depth_view: Some(&state.depth_texture_view),
                 },
-                &texture_view,
-                Some(&state.depth_texture_view),
-                &texture_bindings,
-                TargetInit::Clear(ClearSettings::default()),
+                state.texture_bindings.bindings(),
+                RenderOptions::default(),
             )
             .expect("failed to render to texture");
+        ImageManager::new(
+            &mut state.resources,
+            render_surface.device(),
+            render_surface.queue(),
+            &mut self.cached_images,
+            &mut state.texture_bindings,
+        )
+        .finish_frame();
         render_surface.queue().submit([encoder.finish()]);
         timer.record_time("render");
 
@@ -565,7 +489,7 @@ impl WindowRenderer for VelloHybridWindowRenderer {
             .unwrap();
 
         timer.record_time("wait");
-        timer.print_times("vello_hybrid: ");
+        timer.print_times("vello_gpu: ");
 
         // Empty the Vello scene (memory optimisation)
         self.scene.reset();
