@@ -97,6 +97,13 @@ fn color_filters_render_in_order_with_stage_clamping_and_regions() {
             Color::new([0.75, 0.25, 0.0, 0.5]),
             [96, 32, 0, 128],
         ),
+        (
+            "unsupported-only filter",
+            vec![FilterEffect::Tile],
+            Rect::new(0.0, 0.0, 8.0, SIZE as f64),
+            Color::new([0.75, 0.25, 0.0, 0.5]),
+            [96, 32, 0, 128],
+        ),
     ];
     let mut ordered_pixel = None;
     for (name, effects, region, color, expected) in cases {
@@ -168,6 +175,8 @@ fn color_filters_render_in_order_with_stage_clamping_and_regions() {
             assert_ne!(pixel, ordered_pixel.as_ref().unwrap());
         } else if name == "filter region" {
             assert_pixel(&pixels, 10, 4, [0; 4]);
+        } else if name == "unsupported-only filter" {
+            assert_pixel(&pixels, 10, 4, expected);
         }
     }
 }

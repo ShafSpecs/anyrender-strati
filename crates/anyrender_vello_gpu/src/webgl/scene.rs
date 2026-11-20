@@ -224,6 +224,7 @@ impl PaintScene for WebGlScenePainter<'_> {
             .unwrap_or_default();
         let region = filter
             .as_ref()
+            .filter(|_| !filters.is_empty())
             .and_then(|f| f.nodes().first().map(|n| n.region));
         let filter = filters.pop();
         let nested = filters.len();
