@@ -49,6 +49,11 @@ impl ImageCache {
         self.frame = 0;
     }
 
+    #[cfg(all(target_arch = "wasm32", feature = "webgl"))]
+    pub(crate) fn texture_ids(&self) -> impl Iterator<Item = TextureId> + '_ {
+        self.entries.values().map(|entry| entry.texture_id)
+    }
+
     /// Returns the cached image's texture and transparency hint.
     pub(crate) fn get(&mut self, id: u64) -> Option<(TextureId, bool)> {
         let entry = self.entries.get_mut(&id)?;

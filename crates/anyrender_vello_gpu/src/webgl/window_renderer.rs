@@ -114,6 +114,53 @@ fn set_canvas_size(canvas: &HtmlCanvasElement, width: u32, height: u32) {
 
 impl RenderContext for VelloGpuWebGlWindowRenderer {}
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use peniko::Blob;
+    use vello_common::TextureId;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn suspend_deletes_image_textures() {
+        let canvas: HtmlCanvasElement = web_sys::window()
+            .unwrap()
+            .document()
+            .unwrap()
+            .create_element("canvas")
+            .unwrap()
+            .unchecked_into();
+        let (renderer, resources) = WebGlRenderer::new(&canvas).unwrap();
+        let gl = renderer.gl_context().clone();
+        let texture = gl.create_texture().unwrap();
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&texture));
+        assert!(gl.is_texture(Some(&texture)));
+        let mut window = VelloGpuWebGlWindowRenderer::new();
+        window.render_state = RenderState::Active(ActiveRenderState {
+            renderer,
+            resources,
+            canvas,
+        });
+        let blob = Blob::from(vec![255; 4]);
+        window
+            .cached_images
+            .insert(&blob, TextureId(1), false, 1, 1);
+        window
+            .texture_bindings
+            .insert(TextureId(1), texture.clone(), 1, 1);
+        window.suspend();
+        assert!(
+            !gl.is_texture(Some(&texture)),
+            "suspended image texture is still alive"
+        );
+        assert!(window.texture_bindings.remove(TextureId(1)).is_none());
+        assert!(window.cached_images.get(blob.id()).is_none());
+        window.suspend();
+    }
+}
+
 impl WindowRenderer for VelloGpuWebGlWindowRenderer {
     type ScenePainter<'a>
         = WebGlScenePainter<'a>
@@ -196,6 +243,14 @@ impl WindowRenderer for VelloGpuWebGlWindowRenderer {
     }
 
     fn suspend(&mut self) {
+        if let RenderState::Active(state) = &self.render_state {
+            for id in self.cached_images.texture_ids() {
+                if let Some(texture) = self.texture_bindings.remove(id) {
+                    state.renderer.gl_context().delete_texture(Some(&texture));
+                }
+            }
+        }
+        self.texture_bindings = WebGlTextureBindings::new();
         self.render_state = RenderState::Suspended;
         self.cached_images.clear();
     }
