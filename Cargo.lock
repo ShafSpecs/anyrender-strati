@@ -1144,7 +1144,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e35d6e78f4cebb90e51d543db8fe41528851d6deeef6ef21ebd4bfdc1e784776"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1439,7 +1439,7 @@ dependencies = [
 [[package]]
 name = "glifo"
 version = "0.5.0"
-source = "git+https://github.com/ShafSpecs/vello-strati?rev=f28f6dec63dc46081fda7387f9adbab1b749b09a#f28f6dec63dc46081fda7387f9adbab1b749b09a"
+source = "git+https://github.com/ShafSpecs/vello-strati?rev=4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4#4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4"
 dependencies = [
  "bytemuck",
  "foldhash 0.2.0",
@@ -2386,7 +2386,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3382,7 +3382,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3850,7 +3850,7 @@ version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8c27177b12a6399ffc08b98f76f7c9a1f4fe9fc967c784c5a071fa8d93cf7e1"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4200,7 +4200,7 @@ checksum = "3a3b425286980a367278453f3b6d28cdcb134b574e5a35824a6ff5eebad50bb6"
 [[package]]
 name = "vello"
 version = "0.12.0"
-source = "git+https://github.com/ShafSpecs/vello-strati?rev=f28f6dec63dc46081fda7387f9adbab1b749b09a#f28f6dec63dc46081fda7387f9adbab1b749b09a"
+source = "git+https://github.com/ShafSpecs/vello-strati?rev=4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4#4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4"
 dependencies = [
  "bytemuck",
  "futures-intrusive",
@@ -4218,7 +4218,7 @@ dependencies = [
 [[package]]
 name = "vello_common"
 version = "0.4.0"
-source = "git+https://github.com/ShafSpecs/vello-strati?rev=f28f6dec63dc46081fda7387f9adbab1b749b09a#f28f6dec63dc46081fda7387f9adbab1b749b09a"
+source = "git+https://github.com/ShafSpecs/vello-strati?rev=4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4#4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4"
 dependencies = [
  "bytemuck",
  "fearless_simd",
@@ -4234,7 +4234,7 @@ dependencies = [
 [[package]]
 name = "vello_cpu"
 version = "0.4.0"
-source = "git+https://github.com/ShafSpecs/vello-strati?rev=f28f6dec63dc46081fda7387f9adbab1b749b09a#f28f6dec63dc46081fda7387f9adbab1b749b09a"
+source = "git+https://github.com/ShafSpecs/vello-strati?rev=4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4#4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4"
 dependencies = [
  "bytemuck",
  "crossbeam-channel",
@@ -4251,7 +4251,7 @@ dependencies = [
 [[package]]
 name = "vello_encoding"
 version = "0.12.0"
-source = "git+https://github.com/ShafSpecs/vello-strati?rev=f28f6dec63dc46081fda7387f9adbab1b749b09a#f28f6dec63dc46081fda7387f9adbab1b749b09a"
+source = "git+https://github.com/ShafSpecs/vello-strati?rev=4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4#4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4"
 dependencies = [
  "bytemuck",
  "guillotiere",
@@ -4263,7 +4263,7 @@ dependencies = [
 [[package]]
 name = "vello_gpu"
 version = "0.4.0"
-source = "git+https://github.com/ShafSpecs/vello-strati?rev=f28f6dec63dc46081fda7387f9adbab1b749b09a#f28f6dec63dc46081fda7387f9adbab1b749b09a"
+source = "git+https://github.com/ShafSpecs/vello-strati?rev=4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4#4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4"
 dependencies = [
  "bytemuck",
  "glifo",
@@ -4281,7 +4281,7 @@ dependencies = [
 [[package]]
 name = "vello_gpu_shaders"
 version = "0.4.0"
-source = "git+https://github.com/ShafSpecs/vello-strati?rev=f28f6dec63dc46081fda7387f9adbab1b749b09a#f28f6dec63dc46081fda7387f9adbab1b749b09a"
+source = "git+https://github.com/ShafSpecs/vello-strati?rev=4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4#4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4"
 dependencies = [
  "naga 30.0.2",
  "wesl",
@@ -4293,7 +4293,7 @@ dependencies = [
 [[package]]
 name = "vello_shaders"
 version = "0.12.0"
-source = "git+https://github.com/ShafSpecs/vello-strati?rev=f28f6dec63dc46081fda7387f9adbab1b749b09a#f28f6dec63dc46081fda7387f9adbab1b749b09a"
+source = "git+https://github.com/ShafSpecs/vello-strati?rev=4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4#4440ae64caa3a8d99e937cdbbdab8a4f71bf8fa4"
 dependencies = [
  "bytemuck",
  "log",
@@ -4981,7 +4981,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
