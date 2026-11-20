@@ -2,7 +2,10 @@
 
 use std::sync::Arc;
 
-use anyrender::{AntiAliasing, Filter, PaintScene, filters::FilterEffect};
+use anyrender::{
+    AntiAliasing, Filter, PaintScene,
+    filters::{FilterEffect, FilterInput, FilterInputs, FilterSource},
+};
 use anyrender_vello_gpu::{ExternalTextures, ImageCache, ImageManager, VelloGpuScenePainter};
 use kurbo::{Affine, Rect};
 use peniko::{BlendMode, Color, Fill};
@@ -111,9 +114,49 @@ fn color_filters_render_in_order_with_stage_clamping_and_regions() {
             Color::new([0.75, 0.25, 0.0, 0.5]),
             [96, 32, 0, 128],
         ),
+        (
+            "unshifted invert",
+            vec![FilterEffect::invert(1.0)],
+            canvas,
+            Color::new([0.75, 0.25, 0.0, 0.5]),
+            [32, 96, 128, 128],
+        ),
+        (
+            "SourceGraphic reset after offset",
+            vec![
+                FilterEffect::Offset(kurbo::Vec2::new(4.0, 0.0)),
+                FilterEffect::invert(1.0),
+            ],
+            canvas,
+            Color::new([0.75, 0.25, 0.0, 0.5]),
+            [32, 96, 128, 128],
+        ),
+        (
+            "unsupported input has no region",
+            vec![FilterEffect::invert(1.0)],
+            Rect::new(0.0, 0.0, 8.0, SIZE as f64),
+            Color::new([0.75, 0.25, 0.0, 0.5]),
+            [96, 32, 0, 128],
+        ),
     ];
     let mut ordered_pixel = None;
     for (name, effects, region, color, expected) in cases {
+        let filter = if name == "SourceGraphic reset after offset"
+            || name == "unsupported input has no region"
+        {
+            let mut filter = Filter::new(region);
+            for effect in effects {
+                let source = if name == "unsupported input has no region" {
+                    FilterSource::SourceAlpha
+                } else {
+                    FilterSource::SourceGraphic
+                };
+                filter.add(effect, FilterInputs::single(FilterInput::Source(source)));
+            }
+            filter
+        } else {
+            Filter::linear_list(effects, region)
+        };
         let mut scene = Scene::new(SIZE as u16, SIZE as u16);
         let mut painter = VelloGpuScenePainter::new(
             &mut scene,
@@ -132,7 +175,7 @@ fn color_filters_render_in_order_with_stage_clamping_and_regions() {
             1.0,
             Affine::IDENTITY,
             &canvas,
-            Some(Arc::new(Filter::linear_list(effects, region))),
+            Some(Arc::new(filter)),
             None,
         );
         painter.fill(
@@ -175,6 +218,9 @@ fn color_filters_render_in_order_with_stage_clamping_and_regions() {
         let pixel = &pixels[offset..offset + 4];
         eprintln!("{name}: premultiplied RGBA {pixel:?}, expected {expected:?}");
         assert_pixel(&pixels, 4, 4, expected);
+        if name == "SourceGraphic reset after offset" || name == "unshifted invert" {
+            assert_pixel(&pixels, 2, 4, expected);
+        }
         assert_pixel(&pixels, 14, 14, [255; 4]);
         if name == "brightness then invert" {
             ordered_pixel = Some(pixel.to_vec());
@@ -182,7 +228,7 @@ fn color_filters_render_in_order_with_stage_clamping_and_regions() {
             assert_ne!(pixel, ordered_pixel.as_ref().unwrap());
         } else if name == "filter region" {
             assert_pixel(&pixels, 10, 4, [0; 4]);
-        } else if name == "unsupported-only filter" {
+        } else if name == "unsupported-only filter" || name == "unsupported input has no region" {
             assert_pixel(&pixels, 10, 4, expected);
         }
     }

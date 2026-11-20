@@ -1,13 +1,42 @@
-use anyrender::filters::{EdgeMode, Filter, FilterEffect};
+use anyrender::filters::{EdgeMode, Filter, FilterEffect, FilterInput, FilterSource};
 use vello_common::filter_effects::FilterPrimitive;
 
 pub(crate) fn convert_filter(filter: &Filter) -> Vec<vello_common::filter_effects::Filter> {
-    filter
-        .nodes()
-        .iter()
-        .filter_map(|node| convert_filter_effect(&node.effect))
-        .map(vello_common::filter_effects::Filter::from_primitive)
-        .collect()
+    let nodes = filter.nodes();
+    let mut current = usize::from(filter.output().0);
+    let mut visited = vec![false; nodes.len()];
+    let mut filters = Vec::new();
+    while let Some(node) = nodes.get(current) {
+        if visited[current]
+            || node.inputs.secondary.is_some()
+            || matches!(
+                node.effect,
+                FilterEffect::Blend(_)
+                    | FilterEffect::Composite(_)
+                    | FilterEffect::DisplacementMap(_)
+            )
+        {
+            return Vec::new();
+        }
+        visited[current] = true;
+        if let Some(primitive) = convert_filter_effect(&node.effect) {
+            filters.push(vello_common::filter_effects::Filter::from_primitive(
+                primitive,
+            ));
+        }
+        current = match &node.inputs.primary {
+            Some(FilterInput::Source(FilterSource::SourceGraphic)) => break,
+            Some(FilterInput::Source(_)) => return Vec::new(),
+            Some(FilterInput::Result(id)) => usize::from(id.0),
+            None if current == 0 => break,
+            None => current - 1,
+        };
+        if current >= nodes.len() {
+            return Vec::new();
+        }
+    }
+    filters.reverse();
+    filters
 }
 
 pub(crate) fn convert_filter_effect(effect: &FilterEffect) -> Option<FilterPrimitive> {
@@ -60,8 +89,107 @@ fn convert_edge_mode(edge_mode: EdgeMode) -> vello_common::filter_effects::EdgeM
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyrender::filters::{FilterId, FilterInput, FilterInputs, FilterSource};
     use kurbo::{Affine, Rect};
     use vello_common::filter::PreparedFilter;
+
+    fn graphic() -> FilterInput {
+        FilterInput::Source(FilterSource::SourceGraphic)
+    }
+
+    fn assert_same_chain(filter: &Filter, effects: impl IntoIterator<Item = FilterEffect>) {
+        let expected: Vec<_> = effects
+            .into_iter()
+            .filter_map(|effect| convert_filter_effect(&effect))
+            .map(vello_common::filter_effects::Filter::from_primitive)
+            .collect();
+        assert_eq!(convert_filter(filter), expected);
+    }
+
+    #[test]
+    fn linear_list_is_unchanged() {
+        let effects = [
+            FilterEffect::Offset(kurbo::Vec2::new(4.0, 0.0)),
+            FilterEffect::brightness(2.0),
+            FilterEffect::invert(1.0),
+        ];
+        assert_same_chain(&Filter::linear_list(effects.clone(), Rect::ZERO), effects);
+    }
+
+    #[test]
+    fn source_graphic_resets_the_chain() {
+        let mut filter = Filter::new(Rect::ZERO);
+        filter.add(
+            FilterEffect::Offset(kurbo::Vec2::new(4.0, 0.0)),
+            FilterInputs::single(graphic()),
+        );
+        filter.add(FilterEffect::invert(1.0), FilterInputs::single(graphic()));
+        assert_same_chain(&filter, [FilterEffect::invert(1.0)]);
+    }
+
+    #[test]
+    fn explicit_node_and_previous_result_chain() {
+        let mut filter = Filter::new(Rect::ZERO);
+        let first = filter.add(FilterEffect::brightness(2.0), FilterInputs::NONE);
+        filter.add(
+            FilterEffect::Offset(kurbo::Vec2::new(4.0, 0.0)),
+            FilterInputs::NONE,
+        );
+        filter.add(
+            FilterEffect::invert(1.0),
+            FilterInputs::single(FilterInput::Result(first)),
+        );
+        filter.add(FilterEffect::opacity(0.5), FilterInputs::NONE);
+        assert_same_chain(
+            &filter,
+            [
+                FilterEffect::brightness(2.0),
+                FilterEffect::invert(1.0),
+                FilterEffect::opacity(0.5),
+            ],
+        );
+    }
+
+    #[test]
+    fn invalid_and_cyclic_inputs_are_identity() {
+        for id in [FilterId(99), FilterId(0)] {
+            let mut filter = Filter::new(Rect::ZERO);
+            filter.add(
+                FilterEffect::invert(1.0),
+                FilterInputs::single(FilterInput::Result(id)),
+            );
+            assert!(convert_filter(&filter).is_empty(), "input {id:?}");
+        }
+        let mut filter = Filter::new(Rect::ZERO);
+        filter.add(
+            FilterEffect::brightness(2.0),
+            FilterInputs::single(FilterInput::Result(FilterId(1))),
+        );
+        filter.add(
+            FilterEffect::invert(1.0),
+            FilterInputs::single(FilterInput::Result(FilterId(0))),
+        );
+        assert!(convert_filter(&filter).is_empty());
+    }
+
+    #[test]
+    fn unsupported_sources_and_two_inputs_are_identity() {
+        for source in [FilterSource::SourceAlpha, FilterSource::BackgroundImage] {
+            let mut filter = Filter::new(Rect::ZERO);
+            filter.add(
+                FilterEffect::invert(1.0),
+                FilterInputs::single(FilterInput::Source(source)),
+            );
+            assert!(convert_filter(&filter).is_empty());
+        }
+        let mut filter = Filter::new(Rect::ZERO);
+        filter.add(FilterEffect::invert(1.0), FilterInputs::NONE);
+        filter.add(
+            FilterEffect::Blend(peniko::Mix::Multiply),
+            FilterInputs::dual(graphic(), graphic()),
+        );
+        assert!(convert_filter(&filter).is_empty());
+    }
 
     #[test]
     fn css_color_matrices_are_preserved() {
